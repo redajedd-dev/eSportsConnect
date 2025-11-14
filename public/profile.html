@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profil - eSportsConnect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; }
+        .card { background-color: #1f2937; border: 1px solid #374151; }
+        .btn-gradient { background-image: linear-gradient(to right, #3b82f6, #8b5cf6); }
+        .btn-gradient:hover { background-image: linear-gradient(to right, #2563eb, #7c3aed); }
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px); }
+        #toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 50; display: flex; flex-direction: column; gap: 0.75rem; }
+        .toast { animation: slide-in 0.5s forwards, fade-out 0.5s 4s forwards; }
+        @keyframes slide-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <div id="toast-container"></div>
+
+    <nav class="bg-gray-900/80 backdrop-blur-sm p-4 flex justify-between items-center sticky top-0 z-10 border-b border-gray-700">
+        <a href="/dashboard.html" class="text-2xl font-bold text-white">eSports<span class="text-blue-500">Connect</span></a>
+    </nav>
+
+    <main class="p-8 max-w-4xl mx-auto">
+        <!-- Section Informations du Profil -->
+        <div id="profile-header" class="flex flex-col md:flex-row items-center gap-8 mb-8">
+            <img id="profile-avatar" src="https://placehold.co/128x128/1f2937/7ca0ff?text=?" alt="Avatar" class="w-32 h-32 rounded-full border-4 border-blue-500">
+            <div class="text-center md:text-left">
+                <h2 id="profile-username" class="text-4xl font-extrabold">Chargement...</h2>
+                <p id="profile-email" class="text-gray-400"></p>
+                <p id="profile-bio" class="mt-2 text-gray-300 max-w-xl">Votre biographie ici.</p>
+                <button id="edit-profile-btn" class="hidden mt-4 bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg flex items-center mx-auto md:mx-0">
+                    <i data-lucide="edit-3" class="h-4 w-4 mr-2"></i>Modifier mon profil
+                </button>
+            </div>
+        </div>
+
+        <!-- Section Profils de Jeu -->
+        <div class="card p-6 rounded-lg">
+            <h3 class="text-2xl font-bold mb-4">Profils de Jeu</h3>
+            <div id="game-profiles-list" class="space-y-4 mb-6">
+                <!-- Les profils de jeu seront injectés ici -->
+            </div>
+            <div id="add-game-profile-section" class="hidden">
+                <h4 class="text-lg font-semibold mb-2">Ajouter un nouveau jeu</h4>
+                <form id="add-game-profile-form" class="flex flex-col md:flex-row gap-4">
+                    <input type="text" id="g-game" placeholder="Nom du jeu" required class="flex-grow bg-gray-800 border border-gray-600 rounded-md p-2 text-white">
+                    <input type="text" id="g-ign" placeholder="Pseudo en jeu" required class="flex-grow bg-gray-800 border border-gray-600 rounded-md p-2 text-white">
+                    <input type="text" id="g-rank" placeholder="Rang" class="flex-grow bg-gray-800 border border-gray-600 rounded-md p-2 text-white">
+                    <button type="submit" class="btn-gradient text-white font-bold py-2 px-4 rounded">Ajouter</button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <!-- MODALE pour modifier le profil -->
+    <div id="edit-profile-modal" class="hidden fixed inset-0 z-40 items-center justify-center modal-overlay">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg">
+            <h3 class="text-xl font-bold mb-4">Modifier mon profil</h3>
+            <form id="edit-profile-form" class="space-y-4">
+                <div>
+                    <label for="bio" class="block text-sm font-medium">Biographie</label>
+                    <textarea id="bio" rows="3" class="w-full bg-gray-900 border border-gray-600 rounded-md p-2 mt-1 text-white"></textarea>
+                </div>
+                <div>
+                    <label for="avatarUrl" class="block text-sm font-medium">URL de l'avatar</label>
+                    <input type="url" id="avatarUrl" class="w-full bg-gray-900 border border-gray-600 rounded-md p-2 mt-1 text-white">
+                </div>
+                <div>
+                    <label for="streamChannel" class="block text-sm font-medium">Nom de votre chaîne Twitch</label>
+                    <div class="flex items-center mt-1">
+                        <span class="bg-gray-700 p-2 border border-gray-600 rounded-l-md">twitch.tv/</span>
+                        <input type="text" id="streamChannel" class="w-full bg-gray-900 border border-gray-600 rounded-r-md p-2 text-white" placeholder="votrenom">
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-4 mt-6">
+                    <button type="button" id="cancel-edit-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Annuler</button>
+                    <button type="submit" class="btn-gradient text-white font-bold py-2 px-4 rounded">Sauvegarder</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/';
+
+        const profileAvatar = document.getElementById('profile-avatar');
+        const profileUsername = document.getElementById('profile-username');
+        const profileEmail = document.getElementById('profile-email');
+        const profileBio = document.getElementById('profile-bio');
+        const editProfileBtn = document.getElementById('edit-profile-btn');
+        const gameProfilesList = document.getElementById('game-profiles-list');
+        const addGameProfileSection = document.getElementById('add-game-profile-section');
+        const addGameProfileForm = document.getElementById('add-game-profile-form');
+        const editProfileModal = document.getElementById('edit-profile-modal');
+        const editProfileForm = document.getElementById('edit-profile-form');
+        const cancelEditBtn = document.getElementById('cancel-edit-btn');
+        const toastContainer = document.getElementById('toast-container');
+        
+        let currentUser = null;
+        let viewedUser = null;
+
+        const showToast = (message, isError = false) => {
+            const toast = document.createElement('div');
+            toast.className = `toast p-4 rounded-lg shadow-lg text-white ${isError ? 'bg-red-600' : 'bg-green-600'}`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.remove(), 4500);
+        };
+
+        const fetchUserProfile = async (userId) => {
+            try {
+                const res = await fetch(`/api/users/${userId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error("Utilisateur non trouvé");
+                viewedUser = await res.json();
+                displayUserProfile();
+            } catch (error) {
+                document.querySelector('main').innerHTML = `<p class="text-center text-red-500">${error.message}</p>`;
+            }
+        };
+
+        const displayUserProfile = () => {
+            profileUsername.textContent = viewedUser.username;
+            profileEmail.textContent = viewedUser.email;
+            profileAvatar.src = viewedUser.avatarUrl || `https://placehold.co/128x128/1f2937/7ca0ff?text=${viewedUser.username.charAt(0)}`;
+            profileBio.textContent = viewedUser.bio || "Aucune biographie n'a été ajoutée.";
+
+            if (currentUser && currentUser._id === viewedUser._id) {
+                editProfileBtn.classList.remove('hidden');
+                addGameProfileSection.classList.remove('hidden');
+            }
+
+            gameProfilesList.innerHTML = viewedUser.gameProfiles.length ? viewedUser.gameProfiles.map(gp => `
+                <div class="flex items-center justify-between bg-gray-800 p-3 rounded-md">
+                    <div class="flex items-center gap-4">
+                        <i data-lucide="gamepad-2" class="h-8 w-8 text-blue-400"></i>
+                        <div>
+                            <p class="font-bold">${gp.game}</p>
+                            <p class="text-sm text-gray-400">Pseudo: ${gp.ign} | Rang: ${gp.rank || 'Non spécifié'}</p>
+                        </div>
+                    </div>
+                    ${currentUser && currentUser._id === viewedUser._id ? `<button onclick="deleteGameProfile('${gp._id}')" class="text-red-500 hover:text-red-400"><i data-lucide="trash-2" class="h-5 w-5"></i></button>` : ''}
+                </div>
+            `).join('') : '<p class="text-gray-400">Aucun profil de jeu ajouté.</p>';
+            lucide.createIcons();
+        };
+
+        const openEditModal = () => {
+            document.getElementById('bio').value = viewedUser.bio;
+            document.getElementById('avatarUrl').value = viewedUser.avatarUrl;
+            document.getElementById('streamChannel').value = viewedUser.streamChannel || '';
+            editProfileModal.classList.remove('hidden');
+            editProfileModal.classList.add('flex');
+        };
+
+        const closeEditModal = () => {
+            editProfileModal.classList.add('hidden');
+            editProfileModal.classList.remove('flex');
+        };
+        
+        const deleteGameProfile = async (gameId) => {
+            if (!confirm("Êtes-vous sûr de vouloir supprimer ce profil de jeu ?")) return;
+            try {
+                const res = await fetch(`/api/users/profile/game/${gameId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('Erreur de suppression');
+                showToast('Profil de jeu supprimé !');
+                await fetchUserProfile(viewedUser._id);
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            let userId = urlParams.get('id');
+
+            try {
+                const meRes = await fetch('/api/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!meRes.ok) throw new Error('Session invalide');
+                currentUser = await meRes.json();
+                
+                if (!userId) { // Si aucun ID n'est dans l'URL, on affiche le profil de l'utilisateur courant
+                    userId = currentUser._id;
+                }
+                await fetchUserProfile(userId);
+
+            } catch (error) {
+                localStorage.removeItem('token');
+                window.location.href = '/';
+            }
+        });
+
+        editProfileBtn.addEventListener('click', openEditModal);
+        cancelEditBtn.addEventListener('click', closeEditModal);
+
+        editProfileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const profileData = {
+                bio: document.getElementById('bio').value,
+                avatarUrl: document.getElementById('avatarUrl').value,
+                streamChannel: document.getElementById('streamChannel').value
+            };
+            try {
+                const res = await fetch('/api/users/profile/update', {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(profileData)
+                });
+                if (!res.ok) throw new Error('Erreur de mise à jour');
+                showToast('Profil mis à jour !');
+                closeEditModal();
+                await fetchUserProfile(viewedUser._id);
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        });
+
+        addGameProfileForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const gameProfileData = {
+                game: document.getElementById('g-game').value,
+                ign: document.getElementById('g-ign').value,
+                rank: document.getElementById('g-rank').value,
+            };
+            try {
+                 const res = await fetch('/api/users/profile/game', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(gameProfileData)
+                });
+                 if (!res.ok) throw new Error("Erreur lors de l'ajout du jeu");
+                 addGameProfileForm.reset();
+                 showToast('Jeu ajouté au profil !');
+                 await fetchUserProfile(viewedUser._id);
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>En Direct - eSportsConnect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; }
+        .stream-card { background-color: #1f2937; border: 1px solid #374151; }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <nav class="bg-gray-900/80 backdrop-blur-sm p-4 flex justify-between items-center sticky top-0 z-10 border-b border-gray-700">
+        <a href="/dashboard.html" class="text-2xl font-bold text-white">eSports<span class="text-blue-500">Connect</span></a>
+    </nav>
+
+    <main class="p-8 max-w-7xl mx-auto">
+        <h2 class="text-4xl font-extrabold mb-8">Membres en Direct</h2>
+        <div id="streams-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            <!-- Les streams seront injectés ici -->
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/';
+
+        const streamsListEl = document.getElementById('streams-list');
+
+        const fetchStreams = async () => {
+            streamsListEl.innerHTML = `<div class="col-span-full flex justify-center items-center h-64"><i data-lucide="loader-2" class="animate-spin h-12 w-12"></i></div>`;
+            lucide.createIcons();
+            try {
+                const res = await fetch('/api/users/streams', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error('Erreur de chargement des streams.');
+                const streamers = await res.json();
+                displayStreams(streamers);
+            } catch (e) {
+                streamsListEl.innerHTML = `<p class="col-span-full text-red-500 text-center">${e.message}</p>`;
+            }
+        };
+
+        const displayStreams = (streamers) => {
+            if (streamers.length === 0) {
+                streamsListEl.innerHTML = `
+                    <div class="col-span-full text-center text-gray-400 py-16">
+                        <i data-lucide="video-off" class="w-24 h-24 mx-auto mb-4"></i>
+                        <h3 class="text-2xl font-bold">Personne n'est en direct</h3>
+                        <p>Revenez plus tard pour voir les streams de nos membres.</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+            
+            // CORRECTION : On récupère le nom de domaine dynamiquement
+            const parentDomain = window.location.hostname;
+
+            streamsListEl.innerHTML = streamers.map(streamer => `
+                <div class="stream-card rounded-lg overflow-hidden">
+                    <div class="aspect-video bg-black">
+                        <iframe
+                            src="https://player.twitch.tv/?channel=${streamer.streamChannel}&parent=${parentDomain}&muted=true"
+                            height="100%"
+                            width="100%"
+                            allowfullscreen>
+                        </iframe>
+                    </div>
+                    <div class="p-4 flex items-center">
+                         <img src="${streamer.avatarUrl || `https://placehold.co/40x40/1f2937/7ca0ff?text=${streamer.username.charAt(0)}`}" alt="Avatar" class="w-10 h-10 rounded-full mr-4">
+                        <div>
+                            <h4 class="text-lg font-bold">${streamer.username}</h4>
+                            <a href="https://twitch.tv/${streamer.streamChannel}" target="_blank" class="text-sm text-purple-400 hover:underline">
+                                twitch.tv/${streamer.streamChannel}
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        };
+        
+        document.addEventListener('DOMContentLoaded', fetchStreams);
+    </script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messagerie - eSportsConnect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; }
+        .chat-container { height: calc(100vh - 64px); }
+        .scrollbar-thin::-webkit-scrollbar { width: 5px; }
+        .scrollbar-thin::-webkit-scrollbar-track { background: #1f2937; }
+        .scrollbar-thin::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 10px; }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <nav class="bg-gray-900 p-4 flex justify-between items-center border-b border-gray-700">
+        <div>
+            <a href="/dashboard.html" class="text-2xl font-bold text-white">eSports<span class="text-blue-500">Connect</span></a>
+        </div>
+    </nav>
+
+    <div class="chat-container grid grid-cols-12">
+        <aside class="col-span-12 md:col-span-4 bg-gray-900 border-r border-gray-700 flex flex-col">
+            <div class="p-4 border-b border-gray-700">
+                <h2 class="text-xl font-bold">Conversations</h2>
+                <input type="text" id="search-user" placeholder="Rechercher un utilisateur..." class="w-full bg-gray-800 p-2 mt-4 rounded border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div id="users-list" class="flex-1 overflow-y-auto scrollbar-thin">
+                <!-- Le contenu sera injecté par le script -->
+            </div>
+        </aside>
+
+        <main id="chat-window" class="col-span-12 md:col-span-8 flex flex-col">
+            <div id="no-chat-selected" class="flex flex-col items-center justify-center h-full text-gray-500 p-4 text-center">
+                <i data-lucide="message-square" class="w-24 h-24 mb-4"></i>
+                <h2 class="text-2xl font-semibold">Sélectionnez une conversation</h2>
+                <p>Choisissez un utilisateur dans la liste pour commencer à chatter.</p>
+            </div>
+
+            <div id="active-chat" class="hidden flex flex-col h-full">
+                <div class="flex items-center p-4 bg-gray-900 border-b border-gray-700">
+                    <img id="chat-partner-avatar" src="" alt="Avatar" class="w-10 h-10 rounded-full mr-4">
+                    <h3 id="chat-partner-username" class="text-lg font-bold"></h3>
+                </div>
+                <div id="messages-box" class="flex-1 p-6 overflow-y-auto scrollbar-thin flex flex-col"></div>
+                <div class="p-4 bg-gray-900 border-t border-gray-700">
+                    <form id="message-form" class="flex items-center">
+                        <input type="text" id="message-input" placeholder="Écrivez votre message..." autocomplete="off" required class="flex-1 bg-gray-800 p-3 rounded-l-lg border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 p-3 rounded-r-lg"><i data-lucide="send-horizontal" class="w-6 h-6"></i></button>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        lucide.createIcons();
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/';
+
+        const socket = io({ auth: { token } });
+
+        const usersListEl = document.getElementById('users-list');
+        const searchUserEl = document.getElementById('search-user');
+        const noChatSelectedEl = document.getElementById('no-chat-selected');
+        const activeChatEl = document.getElementById('active-chat');
+        const chatPartnerAvatarEl = document.getElementById('chat-partner-avatar');
+        const chatPartnerUsernameEl = document.getElementById('chat-partner-username');
+        const messagesBoxEl = document.getElementById('messages-box');
+        const messageFormEl = document.getElementById('message-form');
+        const messageInputEl = document.getElementById('message-input');
+
+        let currentUser = null;
+        let allUsers = [];
+        let selectedUser = null;
+
+        const displayUsers = (usersToDisplay) => {
+            usersListEl.innerHTML = '';
+            const otherUsers = usersToDisplay.filter(user => currentUser && user._id !== currentUser._id);
+            if (otherUsers.length === 0) {
+                usersListEl.innerHTML = '<p class="p-4 text-gray-500">Aucun autre utilisateur à afficher.</p>';
+                return;
+            }
+            otherUsers.forEach(user => {
+                const userEl = document.createElement('div');
+                const isSelected = selectedUser && user._id === selectedUser._id;
+                userEl.className = `flex items-center p-4 cursor-pointer hover:bg-gray-800 border-b border-gray-800 transition-colors ${isSelected ? 'bg-blue-900/50' : ''}`;
+                userEl.dataset.userId = user._id;
+                userEl.innerHTML = `
+                    <img src="${user.avatarUrl || `https://placehold.co/40x40/1f2937/7ca0ff?text=${user.username.charAt(0)}`}" alt="Avatar" class="w-10 h-10 rounded-full mr-4">
+                    <span class="font-semibold">${user.username}</span>
+                `;
+                userEl.addEventListener('click', () => selectUserForChat(user));
+                usersListEl.appendChild(userEl);
+            });
+        };
+
+        const selectUserForChat = async (user) => {
+            selectedUser = user;
+            displayUsers(allUsers);
+            noChatSelectedEl.classList.add('hidden');
+            activeChatEl.classList.remove('hidden');
+            activeChatEl.classList.add('flex');
+            chatPartnerUsernameEl.textContent = user.username;
+            chatPartnerAvatarEl.src = user.avatarUrl || `https://placehold.co/40x40/1f2937/7ca0ff?text=${user.username.charAt(0)}`;
+            messagesBoxEl.innerHTML = '<div class="flex justify-center items-center h-full"><i data-lucide="loader-2" class="animate-spin h-8 w-8"></i></div>';
+            lucide.createIcons();
+            try {
+                const res = await fetch(`/api/messages/${user._id}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const messages = await res.json();
+                displayMessages(messages);
+            } catch (error) {
+                messagesBoxEl.innerHTML = '<p class="text-center text-red-500">Erreur de chargement des messages.</p>';
+            }
+        };
+        
+        const displayMessages = (messages) => {
+            messagesBoxEl.innerHTML = '';
+            messages.forEach(msg => appendMessage(msg));
+            messagesBoxEl.scrollTop = messagesBoxEl.scrollHeight;
+        };
+        
+        const appendMessage = (msg) => {
+            if (!currentUser) return;
+            const isMe = msg.sender._id === currentUser._id;
+            const messageEl = document.createElement('div');
+            messageEl.className = `flex items-start gap-3 mb-4 ${isMe ? 'justify-end' : 'justify-start'}`;
+            const avatar = `<img src="${msg.sender.avatarUrl || `https://placehold.co/40x40/1f2937/7ca0ff?text=${msg.sender.username.charAt(0)}`}" class="w-8 h-8 rounded-full ${isMe ? 'order-2' : 'order-1'}">`;
+            const bubble = `<div class="max-w-xs md:max-w-md p-3 rounded-xl ${isMe ? 'bg-blue-600 rounded-br-none order-1' : 'bg-gray-700 rounded-bl-none order-2'}"><p class="text-white">${msg.content}</p><p class="text-xs mt-1 ${isMe ? 'text-blue-200' : 'text-gray-400'} text-right">${new Date(msg.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p></div>`;
+            messageEl.innerHTML = avatar + bubble;
+            messagesBoxEl.appendChild(messageEl);
+            messagesBoxEl.scrollTop = messagesBoxEl.scrollHeight;
+        };
+        
+        messageFormEl.addEventListener('submit', (e) => {
+            e.preventDefault();
+            if (!messageInputEl.value || !selectedUser || !currentUser) return;
+            const messageData = { recipient: selectedUser._id, content: messageInputEl.value };
+            socket.emit('private message', messageData);
+            appendMessage({ sender: currentUser, content: messageInputEl.value, createdAt: new Date() });
+            messageInputEl.value = '';
+        });
+
+        socket.on('private message', (message) => {
+            if (selectedUser && message.sender._id === selectedUser._id) {
+                appendMessage(message);
+            }
+        });
+
+        searchUserEl.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const filteredUsers = allUsers.filter(user => user.username.toLowerCase().includes(searchTerm));
+            displayUsers(filteredUsers);
+        });
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            usersListEl.innerHTML = `<div class="flex justify-center items-center h-full"><i data-lucide="loader-2" class="animate-spin h-8 w-8"></i></div>`;
+            lucide.createIcons();
+            try {
+                const meRes = await fetch('/api/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!meRes.ok) throw new Error('Session invalide');
+                currentUser = await meRes.json();
+                const usersRes = await fetch('/api/users/list', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!usersRes.ok) throw new Error('Impossible de charger les utilisateurs.');
+                allUsers = await usersRes.json();
+                displayUsers(allUsers);
+            } catch (error) {
+                console.error("Erreur d'initialisation du chat:", error);
+                usersListEl.innerHTML = `<p class="p-4 text-red-500">${error.message}</p>`;
+                if (error.message.includes('Session invalide')) {
+                    setTimeout(() => { localStorage.removeItem('token'); window.location.href = '/'; }, 2000);
+                }
+            }
+        });
+
+    </script>
+</body>
+</html>
+

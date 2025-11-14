@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analyse de Performance - eSportsConnect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; }
+        .card { background-color: #1f2937; border: 1px solid #374151; }
+        .btn-gradient { background-image: linear-gradient(to right, #3b82f6, #8b5cf6); }
+        .btn-gradient:hover { background-image: linear-gradient(to right, #2563eb, #7c3aed); }
+        /* Style pour la réponse de l'IA */
+        .prose-invert p { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+        .prose-invert strong { color: #60a5fa; }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <nav class="bg-gray-900/80 backdrop-blur-sm p-4 flex justify-between items-center sticky top-0 z-10 border-b border-gray-700">
+        <a href="/dashboard.html" class="text-2xl font-bold text-white">eSports<span class="text-blue-500">Connect</span></a>
+    </nav>
+
+    <main class="p-8 max-w-4xl mx-auto">
+        <h2 class="text-4xl font-extrabold mb-2">Analyse de Performance IA</h2>
+        <p class="text-gray-400 mb-8">Entrez vos statistiques de match pour recevoir une analyse de notre coach IA.</p>
+
+        <div class="card p-6 rounded-lg mb-8">
+            <form id="stats-form">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <div class="lg:col-span-2">
+                        <label for="game" class="block text-sm font-medium">Jeu</label>
+                        <input type="text" id="game" required class="w-full bg-gray-800 border border-gray-600 rounded-md p-2 mt-1 text-white" placeholder="Ex: Valorant, LoL...">
+                    </div>
+                    <div>
+                        <label for="kills" class="block text-sm font-medium">Kills</label>
+                        <input type="number" id="kills" min="0" required class="w-full bg-gray-800 border border-gray-600 rounded-md p-2 mt-1 text-white">
+                    </div>
+                    <div>
+                        <label for="deaths" class="block text-sm font-medium">Morts</label>
+                        <input type="number" id="deaths" min="0" required class="w-full bg-gray-800 border border-gray-600 rounded-md p-2 mt-1 text-white">
+                    </div>
+                    <div>
+                        <label for="assists" class="block text-sm font-medium">Assists</label>
+                        <input type="number" id="assists" min="0" required class="w-full bg-gray-800 border border-gray-600 rounded-md p-2 mt-1 text-white">
+                    </div>
+                </div>
+                 <div class="mt-4">
+                    <label for="duration" class="block text-sm font-medium">Durée du match (minutes)</label>
+                    <input type="number" id="duration" min="1" required class="w-full bg-gray-800 border border-gray-600 rounded-md p-2 mt-1 text-white">
+                </div>
+                <div class="mt-6">
+                    <button type="submit" id="analyze-btn" class="w-full btn-gradient text-white font-bold py-3 px-6 rounded-lg flex items-center justify-center">
+                        <i data-lucide="brain-circuit" class="mr-2 h-5 w-5"></i>Analyser ma performance
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div id="analysis-result" class="hidden">
+            <h3 class="text-2xl font-bold mb-4">Résultats de l'analyse</h3>
+            <div id="analysis-content" class="card p-6 rounded-lg prose prose-invert max-w-none">
+                <!-- La réponse de l'IA sera injectée ici -->
+            </div>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/';
+
+        const statsForm = document.getElementById('stats-form');
+        const analyzeBtn = document.getElementById('analyze-btn');
+        const analysisResult = document.getElementById('analysis-result');
+        const analysisContent = document.getElementById('analysis-content');
+
+        statsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const statsData = {
+                game: document.getElementById('game').value,
+                kills: parseInt(document.getElementById('kills').value),
+                deaths: parseInt(document.getElementById('deaths').value),
+                assists: parseInt(document.getElementById('assists').value),
+                matchDuration: parseInt(document.getElementById('duration').value),
+            };
+
+            analysisResult.classList.remove('hidden');
+            analysisContent.innerHTML = `<div class="flex justify-center items-center h-32"><i data-lucide="loader-2" class="animate-spin h-8 w-8"></i><p class="ml-4">L'IA analyse vos données...</p></div>`;
+            lucide.createIcons();
+            analyzeBtn.disabled = true;
+
+            try {
+                const res = await fetch('/api/ai/analyze-stats', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(statsData)
+                });
+                if (!res.ok) {
+                    const error = await res.json();
+                    throw new Error(error.message || "L'IA n'a pas pu répondre.");
+                }
+                const data = await res.json();
+                analysisContent.innerHTML = data.analysis;
+
+            } catch (error) {
+                analysisContent.innerHTML = `<p class="text-red-500">${error.message}</p>`;
+            } finally {
+                analyzeBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

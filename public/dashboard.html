@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau de Bord - eSportsConnect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; }
+        .card { background-color: #1f2937; border: 1px solid #374151; transition: transform 0.3s ease, box-shadow 0.3s ease; }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 0 25px rgba(59, 130, 246, 0.1); }
+        .btn-gradient { background-image: linear-gradient(to right, #3b82f6, #8b5cf6); }
+        .btn-gradient:hover { background-image: linear-gradient(to right, #2563eb, #7c3aed); }
+        .modal-overlay { background-color: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px); }
+        #toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 50; display: flex; flex-direction: column; gap: 0.75rem; }
+        .toast { animation: slide-in 0.5s forwards, fade-out 0.5s 4s forwards; }
+        @keyframes slide-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <div id="toast-container"></div>
+
+    <div id="complete-tournament-modal" class="fixed inset-0 z-40 items-center justify-center hidden modal-overlay">
+        <div class="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 class="text-xl font-bold mb-4">Désigner un vainqueur</h3>
+            <p class="text-sm text-gray-400 mb-4">Sélectionnez le vainqueur du tournoi parmi les participants.</p>
+            <form id="complete-tournament-form">
+                <div id="participants-list" class="space-y-2 max-h-60 overflow-y-auto mb-6"></div>
+                <div class="flex justify-end space-x-4">
+                    <button type="button" id="cancel-modal-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Annuler</button>
+                    <button type="submit" class="btn-gradient text-white font-bold py-2 px-4 rounded">Confirmer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <nav class="bg-gray-900/80 backdrop-blur-sm p-4 flex justify-between items-center sticky top-0 z-10 border-b border-gray-700">
+        <h1 class="text-2xl font-bold text-white">eSports<span class="text-blue-500">Connect</span></h1>
+        <div class="flex items-center space-x-4">
+            <a id="admin-link" href="/admin.html" class="hidden bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg text-sm">Admin</a>
+            <a id="profile-link" href="/profile.html" class="text-sm font-semibold text-gray-300 hover:text-white transition-colors">
+                <span id="username-display">Chargement...</span>
+            </a>
+            <button id="logout-btn" class="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg text-sm">Déconnexion</button>
+        </div>
+    </nav>
+
+    <main class="p-8 max-w-7xl mx-auto">
+        <h2 id="welcome-message" class="text-4xl font-extrabold mb-8">Bienvenue sur votre Tableau de Bord</h2>
+
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <a href="/live.html" class="card p-6 text-center hover:border-blue-500">
+                <i data-lucide="video" class="h-12 w-12 mx-auto text-purple-400 mb-4"></i>
+                <h3 class="text-xl font-bold">En Direct</h3>
+                <p class="text-gray-400 text-sm">Voir les membres qui streament.</p>
+            </a>
+            <a href="/resources.html" class="card p-6 text-center hover:border-blue-500">
+                <i data-lucide="book-open" class="h-12 w-12 mx-auto text-green-400 mb-4"></i>
+                <h3 class="text-xl font-bold">Ressources</h3>
+                <p class="text-gray-400 text-sm">Consulter les guides et tutoriels.</p>
+            </a>
+            <a href="/analysis.html" class="card p-6 text-center hover:border-blue-500">
+                <i data-lucide="bar-chart-3" class="h-12 w-12 mx-auto text-yellow-400 mb-4"></i>
+                <h3 class="text-xl font-bold">Analyse de Jeu</h3>
+                <p class="text-gray-400 text-sm">Recevoir des conseils de l'IA.</p>
+            </a>
+        </section>
+
+        <section class="mb-8">
+            <h3 class="text-2xl font-bold mb-4 flex items-center"><i data-lucide="sparkles" class="mr-2 text-yellow-400"></i>Recommandations pour vous</h3>
+            <div id="recommendations-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"></div>
+        </section>
+        
+        <div id="admin-section" class="hidden mb-8">
+            <div class="flex space-x-4 mb-6">
+                <button id="show-course-form-btn" class="btn-gradient text-white font-bold py-2 px-6 rounded-lg flex items-center"><i data-lucide="plus-circle" class="mr-2 h-5 w-5"></i>Ajouter un cours</button>
+                <button id="show-tournament-form-btn" class="btn-gradient text-white font-bold py-2 px-6 rounded-lg flex items-center"><i data-lucide="plus-circle" class="mr-2 h-5 w-5"></i>Créer un tournoi</button>
+            </div>
+            <div id="admin-forms-container">
+                 <div id="course-form-wrapper" class="hidden bg-gray-800 p-6 rounded-lg">
+                    <h3 class="text-2xl font-semibold mb-4">Ajouter un nouveau cours</h3>
+                    <form id="add-course-form" class="space-y-4">
+                        <div><label for="c-title" class="block text-sm font-medium">Titre du cours</label><input type="text" id="c-title" required class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white"></div>
+                        <div><label for="c-description" class="block text-sm font-medium">Description</label><textarea id="c-description" required rows="3" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white"></textarea></div>
+                        <div><label for="c-videoUrl" class="block text-sm font-medium">URL de la vidéo (YouTube, etc.)</label><input type="url" id="c-videoUrl" required class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white"></div>
+                        <div><label for="c-game" class="block text-sm font-medium">Jeu concerné</label><input type="text" id="c-game" required class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white" placeholder="Ex: Valorant, League of Legends..."></div>
+                        <button type="submit" class="btn-gradient text-white font-bold py-2 px-4 rounded">Publier le cours</button>
+                    </form>
+                </div>
+                <div id="tournament-form-wrapper" class="hidden bg-gray-800 p-6 rounded-lg">
+                    <h3 class="text-2xl font-semibold mb-4">Créer un nouveau tournoi</h3>
+                    <form id="add-tournament-form" class="space-y-4">
+                        <div><label for="t-name" class="block text-sm font-medium">Nom du tournoi</label><input type="text" id="t-name" required class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white"></div>
+                        <div><label for="t-game" class="block text-sm font-medium">Jeu</label><input type="text" id="t-game" required class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white"></div>
+                         <div><label for="t-date" class="block text-sm font-medium">Date de début</label><input type="datetime-local" id="t-date" required class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 mt-1 text-white"></div>
+                        <button type="submit" class="btn-gradient text-white font-bold py-2 px-4 rounded">Créer le tournoi</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 space-y-8">
+                <section>
+                    <h3 class="text-2xl font-bold mb-4 flex items-center"><i data-lucide="swords" class="mr-2"></i>Tournois</h3>
+                    <div id="tournaments-list" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+                </section>
+                <section>
+                    <h3 class="text-2xl font-bold mb-4 flex items-center"><i data-lucide="graduation-cap" class="mr-2"></i>Cours disponibles</h3>
+                    <div id="courses-list" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div>
+                </section>
+            </div>
+            <div class="space-y-8">
+                <section class="bg-gray-800 p-6 rounded-lg">
+                    <h3 class="text-2xl font-bold mb-4 flex items-center"><i data-lucide="trophy" class="mr-2"></i>Classements</h3>
+                    <select id="game-filter" class="w-full bg-gray-700 border border-gray-600 rounded-md p-2 text-white mb-4"></select>
+                    <div id="rankings-list"></div>
+                </section>
+            </div>
+        </div>
+    </main>
+
+    <div class="fixed bottom-6 right-6 space-y-4 z-20">
+        <a href="/chatbot.html" class="btn-gradient h-16 w-16 rounded-full flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform">
+            <!-- CORRECTION : Icône changée pour 'bot' -->
+            <i data-lucide="bot" class="h-8 w-8 text-white"></i>
+        </a>
+        <a href="/chat.html" class="btn-gradient h-16 w-16 rounded-full flex items-center justify-center shadow-lg transform hover:scale-110 transition-transform">
+            <!-- CORRECTION : Icône changée pour 'message-circle' -->
+            <i data-lucide="message-circle" class="h-8 w-8 text-white"></i>
+        </a>
+    </div>
+
+
+    <script>
+        lucide.createIcons();
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/';
+
+        const usernameDisplay = document.getElementById('username-display');
+        const profileLink = document.getElementById('profile-link');
+        const welcomeMessage = document.getElementById('welcome-message');
+        const adminSection = document.getElementById('admin-section');
+        const adminLink = document.getElementById('admin-link');
+        const recommendationsList = document.getElementById('recommendations-list');
+        const coursesList = document.getElementById('courses-list');
+        const tournamentsList = document.getElementById('tournaments-list');
+        const rankingsList = document.getElementById('rankings-list');
+        const gameFilter = document.getElementById('game-filter');
+        const logoutBtn = document.getElementById('logout-btn');
+        const modal = document.getElementById('complete-tournament-modal');
+        const modalForm = document.getElementById('complete-tournament-form');
+        const cancelModalBtn = document.getElementById('cancel-modal-btn');
+        const toastContainer = document.getElementById('toast-container');
+        const addCourseForm = document.getElementById('add-course-form');
+        const addTournamentForm = document.getElementById('add-tournament-form');
+        const showCourseFormBtn = document.getElementById('show-course-form-btn');
+        const showTournamentFormBtn = document.getElementById('show-tournament-form-btn');
+        const courseFormWrapper = document.getElementById('course-form-wrapper');
+        const tournamentFormWrapper = document.getElementById('tournament-form-wrapper');
+        
+        let currentUser = null;
+
+        const showToast = (message, isError = false) => {
+            const toast = document.createElement('div');
+            toast.className = `toast p-4 rounded-lg shadow-lg text-white ${isError ? 'bg-red-600' : 'bg-green-600'}`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.remove(), 4500);
+        };
+
+        const showLoading = (element) => {
+            element.innerHTML = '<div class="flex justify-center items-center h-32"><i data-lucide="loader-2" class="animate-spin h-8 w-8"></i></div>';
+            lucide.createIcons();
+        };
+
+        const fetchCurrentUser = async () => {
+             try {
+                const response = await fetch('/api/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!response.ok) throw new Error('Session invalide.');
+                currentUser = await response.json();
+                usernameDisplay.textContent = currentUser.username;
+                profileLink.href = `/profile.html?id=${currentUser._id}`;
+                welcomeMessage.textContent = `Bienvenue, ${currentUser.username} !`;
+                if (currentUser.role === 'admin' || currentUser.role === 'coach') {
+                    adminSection.classList.remove('hidden');
+                }
+                if (currentUser.role === 'admin') {
+                     adminLink.classList.remove('hidden');
+                }
+            } catch (error) {
+                localStorage.removeItem('token');
+                window.location.href = '/';
+            }
+        };
+
+        const openCompleteTournamentModal = async (tournamentId) => {
+            const participantsList = document.getElementById('participants-list');
+            showLoading(participantsList);
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            try {
+                const res = await fetch(`/api/tournaments/${tournamentId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                const tournament = await res.json();
+                participantsList.innerHTML = '';
+                if (tournament.participants.length === 0) {
+                    participantsList.innerHTML = '<p class="text-gray-400">Aucun participant inscrit.</p>';
+                } else {
+                    tournament.participants.forEach(p => {
+                        participantsList.innerHTML += `<label class="flex items-center space-x-3 p-2 rounded-md hover:bg-gray-700 cursor-pointer"><input type="radio" name="winner" value="${p._id}" class="form-radio text-blue-500 bg-gray-900"><span>${p.username}</span></label>`;
+                    });
+                }
+                modalForm.dataset.tournamentId = tournamentId;
+            } catch(e) {
+                showToast('Impossible de charger les participants.', true);
+                closeCompleteTournamentModal();
+            }
+        };
+
+        const closeCompleteTournamentModal = () => {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+
+        const fetchRecommendations = async () => {
+            showLoading(recommendationsList);
+            try {
+                const res = await fetch('/api/ai/recommendations', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error('Erreur de chargement des recommandations.');
+                const recommendations = await res.json();
+                displayRecommendations(recommendations);
+            } catch (e) {
+                recommendationsList.innerHTML = `<p class="col-span-full text-center text-gray-500 p-4">${e.message}</p>`;
+            }
+        };
+
+        const fetchCourses = async () => {
+            showLoading(coursesList);
+            try {
+                const res = await fetch('/api/courses', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error('Erreur de chargement des cours.');
+                const courses = await res.json();
+                displayCourses(courses);
+            } catch (e) { coursesList.innerHTML = `<p class="text-red-500">${e.message}</p>`; }
+        };
+
+        const fetchTournaments = async () => {
+            showLoading(tournamentsList);
+            try {
+                const res = await fetch('/api/tournaments', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error('Erreur de chargement des tournois.');
+                const tournaments = await res.json();
+                displayTournaments(tournaments);
+                populateGameFilter(tournaments);
+            } catch (e) { tournamentsList.innerHTML = `<p class="text-red-500">${e.message}</p>`; }
+        };
+
+        const fetchRankings = async (game) => {
+            if (!game) {
+                rankingsList.innerHTML = '<p class="text-gray-400">Sélectionnez un jeu pour voir le classement.</p>';
+                return;
+            }
+            showLoading(rankingsList);
+            try {
+                const response = await fetch(`/api/rankings/${game}`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!response.ok) throw new Error('Erreur de récupération du classement.');
+                const rankings = await response.json();
+                displayRankings(rankings);
+            } catch (error) {
+                rankingsList.innerHTML = `<p class="text-red-500">${error.message}</p>`;
+            }
+        };
+        
+        const displayRecommendations = ({ courses, tournaments }) => {
+            const allRecs = [
+                ...courses.map(c => ({ type: 'Cours', data: c })),
+                ...tournaments.map(t => ({ type: 'Tournoi', data: t }))
+            ];
+            if (allRecs.length === 0) {
+                recommendationsList.innerHTML = `
+                    <div class="col-span-full text-center text-gray-400 py-8 bg-gray-800 rounded-lg">
+                        <p>Aucune recommandation pour le moment.</p>
+                        <a href="/profile.html" class="text-blue-400 hover:underline">Ajoutez vos jeux préférés à votre profil</a> pour obtenir des suggestions personnalisées !
+                    </div>`;
+                return;
+            }
+            recommendationsList.innerHTML = allRecs.map(rec => {
+                if (rec.type === 'Cours') {
+                    return `
+                        <div class="card rounded-lg p-4 flex flex-col">
+                            <span class="text-xs font-semibold text-green-400 mb-2">COURS RECOMMANDÉ</span>
+                            <h4 class="text-lg font-bold">${rec.data.title}</h4>
+                            <p class="text-gray-400 text-sm flex-grow">Par ${rec.data.coach.username}</p>
+                            <a href="${rec.data.videoUrl}" target="_blank" class="mt-4 bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded text-center text-sm">Voir le cours</a>
+                        </div>`;
+                } else { // Tournoi
+                    return `
+                        <div class="card rounded-lg p-4 flex flex-col">
+                            <span class="text-xs font-semibold text-purple-400 mb-2">TOURNOI RECOMMANDÉ</span>
+                            <h4 class="text-lg font-bold">${rec.data.name}</h4>
+                            <p class="text-gray-400 text-sm flex-grow">Jeu : ${rec.data.game}</p>
+                             <button onclick="registerForTournament('${rec.data._id}')" class="mt-4 btn-gradient text-white font-semibold py-2 px-4 rounded text-sm">S'inscrire</button>
+                        </div>`;
+                }
+            }).join('');
+        };
+
+        const displayCourses = (courses) => {
+            coursesList.innerHTML = courses.length ? courses.map(course => `
+                <div class="card rounded-lg p-4 flex flex-col">
+                    <h4 class="text-xl font-bold text-blue-400">${course.title}</h4>
+                    <p class="text-gray-400 text-sm mb-2">Par ${course.coach.username} | Jeu: ${course.game}</p>
+                    <p class="text-gray-300 flex-grow">${course.description}</p>
+                    <a href="${course.videoUrl}" target="_blank" class="mt-4 bg-gray-600 hover:bg-gray-500 text-white font-semibold py-2 px-4 rounded text-center">Voir la vidéo</a>
+                </div>
+            `).join('') : '<p class="text-gray-400 col-span-full text-center">Aucun cours disponible.</p>';
+        };
+        
+        const displayTournaments = (tournaments) => {
+            tournamentsList.innerHTML = tournaments.length ? tournaments.map(t => {
+                const isRegistered = t.participants.some(p => p._id === currentUser._id);
+                const isFull = t.participants.length >= t.maxParticipants;
+                let actionButton = '';
+
+                if (currentUser.role === 'player' && t.status === 'upcoming') {
+                    if (isRegistered) {
+                        actionButton = `<button disabled class="w-full mt-4 bg-green-600 text-white font-semibold py-2 px-4 rounded cursor-not-allowed">Inscrit</button>`;
+                    } else if (isFull) {
+                        actionButton = `<button disabled class="w-full mt-4 bg-gray-600 text-white font-semibold py-2 px-4 rounded cursor-not-allowed">Complet</button>`;
+                    } else {
+                        actionButton = `<button onclick="registerForTournament('${t._id}')" class="w-full mt-4 btn-gradient text-white font-semibold py-2 px-4 rounded">S'inscrire</button>`;
+                    }
+                } else if ((currentUser.role === 'admin' || currentUser.role === 'coach') && t.status !== 'completed') {
+                     actionButton = `<button onclick='openCompleteTournamentModal("${t._id}")' class="w-full mt-4 bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-2 px-4 rounded">Terminer le tournoi</button>`;
+                } else if (t.status === 'completed') {
+                    actionButton = `<button disabled class="w-full mt-4 bg-gray-700 text-white font-semibold py-2 px-4 rounded cursor-not-allowed">Terminé</button>`;
+                }
+                
+                return `
+                    <div class="card rounded-lg p-4 flex flex-col">
+                        <h4 class="text-xl font-bold text-blue-400">${t.name}</h4>
+                        <p class="text-gray-400 text-sm mb-2">Jeu : ${t.game} | Statut : ${t.status}</p>
+                        <p class="text-gray-300">Début : ${new Date(t.startDate).toLocaleString('fr-FR')}</p>
+                        <p class="text-gray-300 flex-grow">Participants : ${t.participants.length} / ${t.maxParticipants || 'illimité'}</p>
+                        ${actionButton}
+                    </div>
+                `;
+            }).join('') : '<p class="text-gray-400 col-span-full text-center">Aucun tournoi prévu.</p>';
+        };
+
+        const displayRankings = (rankings) => {
+            if (rankings.length === 0) {
+                rankingsList.innerHTML = '<p class="text-gray-400">Aucun classement disponible pour ce jeu.</p>';
+                return;
+            }
+            rankingsList.innerHTML = `
+                <table class="w-full text-left">
+                    <thead><tr class="border-b border-gray-600"><th class="p-2">#</th><th class="p-2">Joueur</th><th class="p-2">Points</th></tr></thead>
+                    <tbody>${rankings.map((r, i) => `<tr class="border-b border-gray-700"><td class="p-2">${i+1}</td><td class="p-2">${r.user.username}</td><td class="p-2">${r.points}</td></tr>`).join('')}</tbody>
+                </table>`;
+        };
+        
+        const populateGameFilter = (tournaments) => {
+            const games = [...new Set(tournaments.map(t => t.game))];
+            const currentGame = gameFilter.value;
+            gameFilter.innerHTML = '<option value="">-- Choisissez un jeu --</option>';
+            games.forEach(game => gameFilter.innerHTML += `<option value="${game}">${game}</option>`);
+            
+            if (currentGame && games.includes(currentGame)) {
+                gameFilter.value = currentGame;
+            } else if (games.length > 0) {
+                gameFilter.value = games[0];
+            }
+            fetchRankings(gameFilter.value);
+        };
+
+        const registerForTournament = async (tournamentId) => {
+             try {
+                const response = await fetch(`/api/tournaments/${tournamentId}/register`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.message);
+                showToast('Inscription réussie !');
+                await fetchTournaments();
+            } catch (error) {
+                showToast(`Erreur: ${error.message}`, true);
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            await fetchCurrentUser();
+            if(currentUser) {
+                await Promise.all([
+                    fetchRecommendations(),
+                    fetchCourses(),
+                    fetchTournaments()
+                ]);
+            }
+        });
+        
+        logoutBtn.addEventListener('click', () => {
+            localStorage.removeItem('token');
+            window.location.href = '/';
+        });
+
+        gameFilter.addEventListener('change', () => fetchRankings(gameFilter.value));
+
+        cancelModalBtn.addEventListener('click', closeCompleteTournamentModal);
+        modalForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const winnerId = new FormData(modalForm).get('winner');
+            const tournamentId = modalForm.dataset.tournamentId;
+            if (!winnerId) return showToast("Veuillez sélectionner un vainqueur.", true);
+            
+            try {
+                const res = await fetch(`/api/tournaments/${tournamentId}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ winnerId })
+                });
+                const result = await res.json();
+                if (!res.ok) throw new Error(result.message);
+                showToast('Tournoi terminé !');
+                await fetchTournaments();
+            } catch (error) {
+                showToast(`Erreur: ${error.message}`, true);
+            } finally {
+                closeCompleteTournamentModal();
+            }
+        });
+
+        showCourseFormBtn.addEventListener('click', () => {
+            courseFormWrapper.classList.toggle('hidden');
+            tournamentFormWrapper.classList.add('hidden');
+        });
+
+        showTournamentFormBtn.addEventListener('click', () => {
+            tournamentFormWrapper.classList.toggle('hidden');
+            courseFormWrapper.classList.add('hidden');
+        });
+
+        addCourseForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const courseData = {
+                title: document.getElementById('c-title').value,
+                description: document.getElementById('c-description').value,
+                videoUrl: document.getElementById('c-videoUrl').value,
+                game: document.getElementById('c-game').value,
+            };
+            try {
+                const response = await fetch('/api/courses', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(courseData)
+                });
+                if (!response.ok) throw new Error('Erreur lors de la création du cours.');
+                addCourseForm.reset();
+                courseFormWrapper.classList.add('hidden');
+                showToast('Cours ajouté avec succès !');
+                await fetchCourses();
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        });
+        
+        addTournamentForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const tournamentData = {
+                name: document.getElementById('t-name').value,
+                game: document.getElementById('t-game').value,
+                startDate: document.getElementById('t-date').value,
+            };
+            try {
+                const response = await fetch('/api/tournaments', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(tournamentData)
+                });
+                if (!response.ok) throw new Error('Erreur lors de la création du tournoi.');
+                addTournamentForm.reset();
+                tournamentFormWrapper.classList.add('hidden');
+                showToast('Tournoi créé avec succès !');
+                await fetchTournaments();
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        });
+    </script>
+</body>
+</html>
+

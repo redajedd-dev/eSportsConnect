@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panneau d'Administration - eSportsConnect</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #111827; }
+        .table-container { background-color: #1f2937; border: 1px solid #374151; }
+        .btn-gradient { background-image: linear-gradient(to right, #3b82f6, #8b5cf6); }
+        .btn-gradient:hover { background-image: linear-gradient(to right, #2563eb, #7c3aed); }
+        #toast-container { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 50; display: flex; flex-direction: column; gap: 0.75rem; }
+        .toast { animation: slide-in 0.5s forwards, fade-out 0.5s 4s forwards; }
+        @keyframes slide-in { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <div id="toast-container"></div>
+
+    <nav class="bg-gray-900/80 backdrop-blur-sm p-4 flex justify-between items-center sticky top-0 z-10 border-b border-gray-700">
+        <a href="/dashboard.html" class="text-2xl font-bold text-white">eSports<span class="text-blue-500">Connect</span></a>
+    </nav>
+
+    <main class="p-8 max-w-7xl mx-auto">
+        <h2 class="text-4xl font-extrabold mb-8">Panneau d'Administration</h2>
+
+        <!-- Section de Gestion des Utilisateurs -->
+        <div class="table-container rounded-lg overflow-hidden mb-12">
+            <div class="p-4 border-b border-gray-700">
+                <h3 class="text-xl font-bold">Gestion des Utilisateurs</h3>
+            </div>
+            <table class="w-full text-left">
+                <thead class="bg-gray-800">
+                    <tr>
+                        <th class="p-4 font-semibold">Utilisateur</th>
+                        <th class="p-4 font-semibold">Email</th>
+                        <th class="p-4 font-semibold">Rôle</th>
+                        <th class="p-4 font-semibold">Diplôme</th>
+                        <th class="p-4 font-semibold">Statut Coach</th>
+                        <th class="p-4 font-semibold">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="users-table-body">
+                    <!-- Les utilisateurs seront injectés ici -->
+                </tbody>
+            </table>
+        </div>
+
+        <!-- NOUVELLE SECTION : MODÉRATION DE CONTENU -->
+        <div class="table-container rounded-lg overflow-hidden">
+            <div class="p-4 border-b border-gray-700">
+                <h3 class="text-xl font-bold">Messages Signalés</h3>
+            </div>
+            <table class="w-full text-left">
+                <thead class="bg-gray-800">
+                    <tr>
+                        <th class="p-4 font-semibold">Contenu du Message</th>
+                        <th class="p-4 font-semibold">De</th>
+                        <th class="p-4 font-semibold">À</th>
+                        <th class="p-4 font-semibold">Raison du signalement</th>
+                        <th class="p-4 font-semibold">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="flagged-messages-tbody">
+                    <!-- Les messages signalés seront injectés ici -->
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script>
+        lucide.createIcons();
+        const token = localStorage.getItem('token');
+        if (!token) window.location.href = '/';
+
+        const usersTableBody = document.getElementById('users-table-body');
+        const flaggedMessagesTbody = document.getElementById('flagged-messages-tbody');
+        const toastContainer = document.getElementById('toast-container');
+        
+        const showToast = (message, isError = false) => {
+            const toast = document.createElement('div');
+            toast.className = `toast p-4 rounded-lg shadow-lg text-white ${isError ? 'bg-red-600' : 'bg-green-600'}`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+            setTimeout(() => toast.remove(), 4500);
+        };
+
+        const fetchAndDisplayUsers = async () => {
+            usersTableBody.innerHTML = `<tr><td colspan="6" class="p-4 text-center"><i data-lucide="loader-2" class="animate-spin h-8 w-8 mx-auto"></i></td></tr>`;
+            lucide.createIcons();
+            try {
+                const res = await fetch('/api/users/all', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) {
+                    if (res.status === 403) throw new Error("Accès refusé. Vous n'êtes pas administrateur.");
+                    throw new Error("Erreur de chargement des utilisateurs.");
+                }
+                const users = await res.json();
+                displayUsers(users);
+            } catch (error) {
+                usersTableBody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
+            }
+        };
+
+        const displayUsers = (users) => {
+            usersTableBody.innerHTML = '';
+            if (users.length === 0) {
+                usersTableBody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-gray-400">Aucun utilisateur trouvé.</td></tr>';
+                return;
+            }
+            users.forEach(user => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-700 hover:bg-gray-800';
+
+                const roleOptions = ['player', 'coach', 'admin']
+                    .map(role => `<option value="${role}" ${user.role === role ? 'selected' : ''}>${role}</option>`).join('');
+
+                let verifyButton = '';
+                if (user.role === 'coach' && !user.isVerified) {
+                    verifyButton = `<button onclick="verifyCoach('${user._id}')" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-xs">Vérifier</button>`;
+                } else if (user.role === 'coach' && user.isVerified) {
+                    verifyButton = `<span class="text-green-400 font-semibold">Vérifié</span>`;
+                }
+
+                tr.innerHTML = `
+                    <td class="p-4">${user.username}</td>
+                    <td class="p-4 text-gray-400">${user.email}</td>
+                    <td class="p-4">
+                        <select onchange="updateUserRole('${user._id}', this.value)" class="bg-gray-700 border border-gray-600 rounded-md p-1">
+                            ${roleOptions}
+                        </select>
+                    </td>
+                    <td class="p-4">
+                        ${user.diplomaUrl ? `<a href="${user.diplomaUrl}" target="_blank" class="text-blue-400 hover:underline">Voir</a>` : 'N/A'}
+                    </td>
+                    <td class="p-4">${verifyButton || 'N/A'}</td>
+                    <td class="p-4">
+                        <a href="/profile.html?id=${user._id}" class="text-blue-400 hover:underline">Voir Profil</a>
+                    </td>
+                `;
+                usersTableBody.appendChild(tr);
+            });
+            lucide.createIcons();
+        };
+        
+        const updateUserRole = async (userId, newRole) => {
+            try {
+                const res = await fetch(`/api/users/${userId}/role`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ role: newRole })
+                });
+                if (!res.ok) throw new Error('Erreur de mise à jour du rôle');
+                showToast("Rôle mis à jour avec succès !");
+                await fetchAndDisplayUsers();
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        };
+
+        const verifyCoach = async (userId) => {
+            try {
+                const res = await fetch(`/api/users/${userId}/verify`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('Erreur lors de la vérification');
+                showToast("Coach vérifié avec succès !");
+                await fetchAndDisplayUsers();
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        };
+
+        const fetchFlaggedMessages = async () => {
+            flaggedMessagesTbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center"><i data-lucide="loader-2" class="animate-spin h-8 w-8 mx-auto"></i></td></tr>`;
+            lucide.createIcons();
+            try {
+                const res = await fetch('/api/moderation/pending', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error("Erreur de chargement des messages signalés.");
+                const flaggedMessages = await res.json();
+                displayFlaggedMessages(flaggedMessages);
+            } catch (error) {
+                flaggedMessagesTbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-red-500">${error.message}</td></tr>`;
+            }
+        };
+
+        const displayFlaggedMessages = (messages) => {
+            flaggedMessagesTbody.innerHTML = '';
+            if (messages.length === 0) {
+                flaggedMessagesTbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-400">Aucun message signalé pour le moment.</td></tr>';
+                return;
+            }
+            messages.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-gray-700 hover:bg-gray-800';
+                tr.id = `flag-${item._id}`;
+                tr.innerHTML = `
+                    <td class="p-4 text-gray-300 italic">"${item.message.content}"</td>
+                    <td class="p-4">${item.message.sender.username}</td>
+                    <td class="p-4">${item.message.recipient.username}</td>
+                    <td class="p-4 text-yellow-400">${item.reason}</td>
+                    <td class="p-4">
+                        <button onclick="reviewFlag('${item._id}')" class="bg-green-600 hover:bg-green-700 text-white font-bold py-1 px-3 rounded text-xs">Marquer comme lu</button>
+                    </td>
+                `;
+                flaggedMessagesTbody.appendChild(tr);
+            });
+        };
+
+        const reviewFlag = async (moderationId) => {
+             try {
+                const res = await fetch(`/api/moderation/${moderationId}/review`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) throw new Error('Erreur lors de la mise à jour');
+                showToast("Signalement traité !");
+                document.getElementById(`flag-${moderationId}`).remove();
+            } catch (error) {
+                showToast(error.message, true);
+            }
+        };
+
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const res = await fetch('/api/users/me', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!res.ok) throw new Error('Session invalide');
+                const currentUser = await res.json();
+                if (currentUser.role !== 'admin') {
+                    document.querySelector('main').innerHTML = `
+                        <div class="text-center">
+                            <h2 class="text-2xl font-bold text-red-500">Accès non autorisé</h2>
+                            <p class="text-gray-400 mt-2">Cette page est réservée aux administrateurs.</p>
+                            <a href="/dashboard.html" class="mt-4 inline-block btn-gradient text-white font-bold py-2 px-4 rounded">Retour au tableau de bord</a>
+                        </div>`;
+                    return;
+                }
+                await fetchAndDisplayUsers();
+                await fetchFlaggedMessages();
+            } catch (error) {
+                localStorage.removeItem('token');
+                window.location.href = '/';
+            }
+        });
+    </script>
+</body>
+</html>
+
